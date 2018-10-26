@@ -9,29 +9,27 @@ from time import sleep
 import logging
 import pdb
 
+DEFAULT_MODULES = 'unian'
+
 
 class TelegramSession:
     def __init__(self, tg_token):
-        self.users = {}
         self.upd = Updater(tg_token)
         self.dp = self.upd.dispatcher
         self.users_db = SQLiteDB()
+        self.users_cache = {}
 
         self.fetch_db()
         self.init_logic()
 
-    def add_user(self, tg_id):
-        if tg_id in self.users:
-            raise SessionException
-        else:
-            self.users[tg_id] = TelegramUser(id=tg_id)
-
     def get_user(self, tg_id):
-        usr = self.users.get(tg_id)
-        if usr:
-            return usr
-        else:
+        return self.users_cache.get(tg_id)
+
+    def add_user(self, tg_id, modules):
+        if tg_id in self.users_cache:
             raise SessionException
+        else:
+            self.users_cache[tg_id] = TelegramUser(id=tg_id, modules=modules)
 
     def init_logic(self):
         dp = self.dp
@@ -39,21 +37,35 @@ class TelegramSession:
         dp.add_handler(CommandHandler('debug', self.cmd_debug))
         dp.add_handler(CommandHandler('stop', self.cmd_stop))
         dp.add_handler(CommandHandler('menu', self.cmd_menu))
+        dp.add_handler(CommandHandler('fetch', self.cmd_fetch))
 
         u = self.upd
         j = u.job_queue
         j.run_repeating(self.job_scrape, interval=60, first=0)
 
     def fetch_db(self):
-        ...
+        f = self.users_db.get_all_users()
+        if not f:
+            return
+        else:
+            for tg_id, modules in f:
+                self.add_user(tg_id, modules)
 
     def cmd_start(self, bot, update):
         """Should be blocking because writes to db"""
-
         usr = update.message.from_user
+        user_obj = self.get_user(usr.id)
+        if user_obj:
+            update.message.reply_text('You are already registered! To get help use /help')
+            return
+        self.users_db.add_user(tg_id=usr.id, modules=DEFAULT_MODULES)
+        self.add_user(usr.id, DEFAULT_MODULES)
+
+    def cmd_fetch(self, bot, update):
         ...
 
     def cmd_debug(self, bot, update):
+        usr = update.message.from_user
         update.message.reply_text('dropped to pdb session, bye')
         pdb.set_trace()
 

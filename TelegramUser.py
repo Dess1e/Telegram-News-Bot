@@ -1,18 +1,7 @@
 
 
 class TelegramUser:
-    def __init__(self, **kwargs):
-        self.id = kwargs['id']
-        self.state = None
+    def __init__(self, id, modules):
+        self.id = id
+        self.modules = modules
 
-    def set_state(self, state):
-        self.state = state
-
-    def get_state(self):
-        return self.state
-
-    def get_enabled_spiders(self):
-        ...
-
-    def set_enabled_spiders(self, data: str):
-        ...
