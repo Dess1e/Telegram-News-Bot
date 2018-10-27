@@ -1,15 +1,17 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, RegexHandler, ConversationHandler
 
-from SQLiteDB import SQLiteDB
+from DBHandler import SQLiteDB
 from Exceptions import SessionException
 from TelegramUser import TelegramUser
 
-from time import sleep
-import logging
 import pdb
+import os
+from importlib import import_module as il
 
-DEFAULT_MODULES = 'unian'
+DEFAULT_MODULES = 'TestScraper'
+ALL_MODULES = {m.__name__: m for m in [il('modules.' + n[:-3]) for n in os.listdir('modules') if n != '__pycache__']}
+SCRAPE_INTERVAL = 10
 
 
 class TelegramSession:
@@ -41,7 +43,7 @@ class TelegramSession:
 
         u = self.upd
         j = u.job_queue
-        j.run_repeating(self.job_scrape, interval=60, first=0)
+        j.run_repeating(self.job_scrape, interval=SCRAPE_INTERVAL * 60 + 10, first=3)
 
     def fetch_db(self):
         f = self.users_db.get_all_users()
@@ -62,12 +64,18 @@ class TelegramSession:
         self.add_user(usr.id, DEFAULT_MODULES)
 
     def cmd_fetch(self, bot, update):
-        ...
+        usr = update.message.from_user
+        user_obj = self.get_user(usr.id)
+        ms = user_obj.enabled_modules
+        for m in ms:
+            s = m.scrape(SCRAPE_INTERVAL)
+            update.message.reply_text(s)
 
     def cmd_debug(self, bot, update):
         usr = update.message.from_user
         update.message.reply_text('dropped to pdb session, bye')
-        pdb.set_trace()
+        #pdb.set_trace()
+        print(dict(ALL_MODULES))
 
     def cmd_menu(self, bot, update):
         usr = update.message.from_user
@@ -93,7 +101,15 @@ class TelegramSession:
         ...
 
     def job_scrape(self, bot, job):
-        ...
+        d = dict(ALL_MODULES)
+        for mod_name, mod in ALL_MODULES.items():
+            d[mod_name] = mod.scrape(SCRAPE_INTERVAL)
+
+        for usr in self.users_cache.values():
+            for mod in usr.enabled_modules:
+                data = d.get('modules.' + mod)
+                if data:
+                    bot.sendMessage(usr.id, data)
 
     def main_loop(self):
         self.upd.start_polling()

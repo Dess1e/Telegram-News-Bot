@@ -1,7 +1,9 @@
 
 
 class TelegramUser:
-    def __init__(self, id, modules):
+    def __init__(self, id, modules: str):
         self.id = id
-        self.modules = modules
+        self.enabled_modules = modules.split(':')
+
+
 
