@@ -25,6 +25,15 @@ class TelegramSession:
         self.fetch_db()
         self.init_logic()
 
+    @staticmethod
+    def build_menu(buttons, n_cols, header_buttons=None, footer_buttons=None):
+        menu = [buttons[i:i + n_cols] for i in range(0, len(buttons), n_cols)]
+        if header_buttons:
+            menu.insert(0, header_buttons)
+        if footer_buttons:
+            menu.append(footer_buttons)
+        return menu
+
     def get_user(self, tg_id):
         return self.users_cache.get(tg_id)
 
@@ -82,35 +91,37 @@ class TelegramSession:
 
     def cmd_menu(self, bot, update):
         usr = update.message.from_user
-
-        def build_menu(buttons, n_cols, header_buttons=None, footer_buttons=None):
-            menu = [buttons[i:i + n_cols] for i in range(0, len(buttons), n_cols)]
-            if header_buttons:
-                menu.insert(0, header_buttons)
-            if footer_buttons:
-                menu.append(footer_buttons)
-            return menu
-        btn_list = []
-        enabled_modules = self.get_user(usr.id).split(':')
-        for module in ALL_MODULES:
-            suffix = ' +' if module in enabled_modules else ' -'
-            btn = InlineKeyboardButton(module + suffix, callback_data=module)
-            btn_list.append(btn)
-
-        reply_markup = InlineKeyboardMarkup(build_menu(btn_list, n_cols=2))
+        reply_markup = self.build_modules_menu(usr.id)
         update.message.reply_text('Select module to switch', reply_markup=reply_markup)
 
     def cmd_stop(self, bot, update):
         ...
 
+    def build_modules_menu(self, tg_id):
+        btn_list = []
+        enabled_modules = self.get_user(tg_id).enabled_modules
+        for module in ALL_MODULES:
+            suffix = ' +' if module in enabled_modules else ' -'
+            btn = InlineKeyboardButton(module + suffix, callback_data=module)
+            btn_list.append(btn)
+        return InlineKeyboardMarkup(self.build_menu(btn_list, n_cols=2))
+
     def callback_handler(self, bot, update):
         cb = update.callback_query
         data = cb.data
 
-        usr_obj = self.get_user(update.message.from_user.id)
-        modules = usr_obj.enabled_modules.split(':')
-
-
+        usr_obj = self.get_user(cb.from_user.id)
+        modules = usr_obj.enabled_modules
+        if data in modules:
+            modules.remove(data)
+            sw = 'OFF'
+        else:
+            modules.append(data)
+            sw = 'ON'
+        usr_obj.enabled_modules = modules
+        self.users_db.update_user(cb.from_user.id, ':'.join(modules))
+        cb.edit_message_text('Switched {} {}'.format(data, sw),
+                             reply_markup=self.build_modules_menu(usr_obj.id))
 
     def job_scrape(self, bot, job):
         d = dict(ALL_MODULES)
