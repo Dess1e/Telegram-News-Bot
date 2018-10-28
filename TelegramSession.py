@@ -1,5 +1,6 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, RegexHandler, ConversationHandler
+from telegram.ext import (Updater, CommandHandler, MessageHandler, Filters, RegexHandler, ConversationHandler,
+                          CallbackQueryHandler)
 
 from DBHandler import SQLiteDB
 from Exceptions import SessionException
@@ -9,8 +10,8 @@ import pdb
 import os
 from importlib import import_module as il
 
-DEFAULT_MODULES = 'TestScraper'
-ALL_MODULES = {m.__name__: m for m in [il('modules.' + n[:-3]) for n in os.listdir('modules') if n != '__pycache__']}
+DEFAULT_MODULES = 'TestScraper:TestScraper2'
+ALL_MODULES = {m.__name__.split('.')[1]: m for m in [il('modules.' + n[:-3]) for n in os.listdir('modules') if n != '__pycache__']}
 SCRAPE_INTERVAL = 10
 
 
@@ -40,6 +41,7 @@ class TelegramSession:
         dp.add_handler(CommandHandler('stop', self.cmd_stop))
         dp.add_handler(CommandHandler('menu', self.cmd_menu))
         dp.add_handler(CommandHandler('fetch', self.cmd_fetch))
+        dp.add_handler(CallbackQueryHandler(self.callback_handler))
 
         u = self.upd
         j = u.job_queue
@@ -62,6 +64,7 @@ class TelegramSession:
             return
         self.users_db.add_user(tg_id=usr.id, modules=DEFAULT_MODULES)
         self.add_user(usr.id, DEFAULT_MODULES)
+        update.message.reply_text('Now you are registered for updates!')
 
     def cmd_fetch(self, bot, update):
         usr = update.message.from_user
@@ -87,18 +90,27 @@ class TelegramSession:
             if footer_buttons:
                 menu.append(footer_buttons)
             return menu
+        btn_list = []
+        enabled_modules = self.get_user(usr.id).split(':')
+        for module in ALL_MODULES:
+            suffix = ' +' if module in enabled_modules else ' -'
+            btn = InlineKeyboardButton(module + suffix, callback_data=module)
+            btn_list.append(btn)
 
-        button_list = [
-            InlineKeyboardButton('Switch Mode', callback_data='switch_mode'),
-            InlineKeyboardButton('jora', callback_data='1'),
-            InlineKeyboardButton('jora', callback_data='2'),
-            InlineKeyboardButton('jora', callback_data='3')
-        ]
-        reply_markup = InlineKeyboardMarkup(build_menu(button_list, n_cols=2))
-        update.message.reply_text('boba', reply_markup=reply_markup)
+        reply_markup = InlineKeyboardMarkup(build_menu(btn_list, n_cols=2))
+        update.message.reply_text('Select module to switch', reply_markup=reply_markup)
 
     def cmd_stop(self, bot, update):
         ...
+
+    def callback_handler(self, bot, update):
+        cb = update.callback_query
+        data = cb.data
+
+        usr_obj = self.get_user(update.message.from_user.id)
+        modules = usr_obj.enabled_modules.split(':')
+
+
 
     def job_scrape(self, bot, job):
         d = dict(ALL_MODULES)
@@ -107,7 +119,7 @@ class TelegramSession:
 
         for usr in self.users_cache.values():
             for mod in usr.enabled_modules:
-                data = d.get('modules.' + mod)
+                data = d.get(mod)
                 if data:
                     bot.sendMessage(usr.id, data)
 
