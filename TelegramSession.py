@@ -6,13 +6,12 @@ from DBHandler import SQLiteDB
 from Exceptions import SessionException
 from TelegramUser import TelegramUser
 
-import pdb
 import os
 from importlib import import_module as il
 
-DEFAULT_MODULES = 'TestScraper:TestScraper2'
+DEFAULT_MODULES = ':'.join([dr.split('.')[0] for dr in os.listdir('modules') if dr[-3:] == '.py'])
 ALL_MODULES = {m.__name__.split('.')[1]: m for m in [il('modules.' + n[:-3]) for n in os.listdir('modules') if n != '__pycache__']}
-SCRAPE_INTERVAL = 10
+SCRAPE_INTERVAL = 20 * 60
 
 
 class TelegramSession:
@@ -54,7 +53,7 @@ class TelegramSession:
 
         u = self.upd
         j = u.job_queue
-        j.run_repeating(self.job_scrape, interval=SCRAPE_INTERVAL * 60 + 10, first=3)
+        j.run_repeating(self.job_scrape, interval=10, first=1)
 
     def fetch_db(self):
         f = self.users_db.get_all_users()
@@ -132,7 +131,10 @@ class TelegramSession:
             for mod in usr.enabled_modules:
                 data = d.get(mod)
                 if data:
-                    bot.sendMessage(usr.id, data)
+                    for ar in data:
+                        msg_text = '{}:* {}*\n\n{} [{}]({})\n\n{}\n'.format(mod, ar['header'], 'Read at',
+                                                                            mod, ar['link'], ar['text'])
+                        bot.sendPhoto(usr.id, ar['img'], caption=msg_text, parse_mode='Markdown')
 
     def main_loop(self):
         self.upd.start_polling()
